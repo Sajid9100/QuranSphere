@@ -453,8 +453,27 @@ export function ApplyForm() {
   return (
     <div className="space-y-8">
       {/* Stepper */}
-      <div>
-        <div ref={stepperRef} className="relative mb-6">
+      <div ref={stepperRef}>
+        {/* Mobile-only linear progress bar */}
+        <div className="mb-5 sm:hidden">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+              Step {step} of {TOTAL_STEPS}
+            </span>
+            <span className="truncate text-xs font-medium text-muted-foreground">
+              {STEPS[step - 1]}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${(step / TOTAL_STEPS) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Circle stepper — smaller on mobile */}
+        <div className="relative mb-6">
           <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-border" />
           <div
             className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary transition-all duration-500"
@@ -473,7 +492,7 @@ export function ApplyForm() {
                     onClick={() => canClick && goToStep(n)}
                     disabled={!canClick}
                     className={[
-                      "relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition",
+                      "relative z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold transition sm:h-9 sm:w-9 sm:text-xs",
                       isDone
                         ? "border-primary bg-primary text-white"
                         : isCurrent
@@ -483,7 +502,7 @@ export function ApplyForm() {
                     ].join(" ")}
                     aria-label={`Go to step ${n}: ${label}`}
                   >
-                    {isDone ? <Check className="h-4 w-4" strokeWidth={3} /> : n}
+                    {isDone ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={3} /> : n}
                   </button>
                   <span
                     className={`mt-2 hidden text-[11px] font-medium sm:block ${
@@ -499,7 +518,7 @@ export function ApplyForm() {
             })}
           </div>
         </div>
-        <div className="flex items-end justify-between">
+        <div className="hidden items-end justify-between sm:flex">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-primary">
               Step {step} of {TOTAL_STEPS}
@@ -509,7 +528,7 @@ export function ApplyForm() {
             </div>
           </div>
           {step < TOTAL_STEPS && (
-            <div className="hidden text-right sm:block">
+            <div className="text-right">
               <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Up next
               </div>

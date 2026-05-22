@@ -140,13 +140,13 @@ export default function AboutPage() {
               certified Quran and Islamic teachers — from the comfort of home.
             </p>
 
-            <div className="mx-auto mt-10 grid max-w-2xl grid-cols-3 gap-6">
+            <div className="mx-auto mt-10 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
               {HERO_STATS.map((s) => (
                 <div
                   key={s.label}
-                  className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#c9a84c] hover:shadow-lg sm:p-8"
+                  className="rounded-2xl border border-gray-100 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#c9a84c] hover:shadow-lg sm:p-8"
                 >
-                  <div className="font-heading text-4xl font-bold text-[#0a2e1e]">
+                  <div className="font-heading text-3xl font-bold text-[#0a2e1e] sm:text-4xl">
                     {s.value}
                   </div>
                   <div className="mt-2 text-sm font-medium text-gray-600">

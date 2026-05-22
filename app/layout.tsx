@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 const inter = Inter({
@@ -22,12 +23,24 @@ export const metadata: Metadata = {
     "Islamic learning",
     "Quran classes for kids",
   ],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "LearnFurqan",
+    statusBarStyle: "default",
+  },
   openGraph: {
     title: "LearnFurqan — Learn Quran Online",
     description:
       "Live one-on-one Quran classes with certified teachers worldwide.",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a2e1e",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -37,8 +50,9 @@ export default function RootLayout({
 }) {
   const tree = (
     <html lang="en" className={inter.variable}>
-      <body className="min-h-screen bg-background text-foreground font-sans antialiased">
+      <body className="min-h-screen overflow-x-clip bg-background text-foreground font-sans antialiased">
         <div className="page-transition">{children}</div>
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
