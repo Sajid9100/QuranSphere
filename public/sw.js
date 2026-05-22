@@ -1,4 +1,4 @@
-const CACHE = 'lf-v1';
+const CACHE = 'lf-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])));

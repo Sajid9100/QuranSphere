@@ -51,7 +51,12 @@ export default function RootLayout({
   const tree = (
     <html lang="en" className={`${inter.variable} max-w-full overflow-x-hidden`}>
       <body className="min-h-screen max-w-full overflow-x-hidden bg-background text-foreground font-sans antialiased">
-        <div className="page-transition">{children}</div>
+        <div
+          className="page-transition"
+          style={{ overflowX: "hidden", width: "100%", position: "relative" }}
+        >
+          {children}
+        </div>
         <ServiceWorkerRegister />
       </body>
     </html>

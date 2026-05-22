@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard,
   Users,
@@ -196,30 +195,29 @@ function MobileMenu() {
         <Menu className="h-6 w-6" />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            <motion.div
-              key="overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-black/50"
-              onClick={() => setOpen(false)}
-              aria-hidden
-            />
-            <motion.aside
-              key="drawer"
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "tween", ease: [0.22, 1, 0.36, 1], duration: 0.3 }}
-              className="fixed right-0 top-0 z-50 flex h-full w-[280px] flex-col overflow-y-auto bg-white shadow-2xl"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Mobile menu"
-            >
+      {/* Overlay — always mounted, fades via opacity */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setOpen(false)}
+        aria-hidden
+        style={{ isolation: "isolate" }}
+      />
+
+      {/* Drawer — always mounted, slides via translate */}
+      <aside
+        className={cn(
+          "fixed right-0 top-0 z-50 flex h-full w-[280px] flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-300 ease-out",
+          open ? "translate-x-0" : "translate-x-full"
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mobile menu"
+        aria-hidden={!open}
+        style={{ isolation: "isolate" }}
+      >
               <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
                 <Logo />
                 <button
@@ -300,10 +298,7 @@ function MobileMenu() {
                   ))}
                 </div>
               </SignedOut>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      </aside>
     </div>
   );
 }
