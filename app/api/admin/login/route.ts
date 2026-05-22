@@ -61,14 +61,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const captchaToken = (body.captchaToken ?? "").toString();
-  if (!captchaToken) {
-    return NextResponse.json({ error: "CAPTCHA failed" }, { status: 400 });
-  }
-  const captchaOk = await verifyTurnstile(captchaToken, ip);
-  if (!captchaOk) {
-    await recordAdminLoginAttempt(ip, false);
-    return NextResponse.json({ error: "CAPTCHA failed" }, { status: 400 });
+  // Turnstile is optional: if no secret key is configured (e.g. local dev),
+  // skip CAPTCHA validation entirely and let login proceed normally.
+  const turnstileConfigured = Boolean(process.env.TURNSTILE_SECRET_KEY);
+  if (turnstileConfigured) {
+    const captchaToken = (body.captchaToken ?? "").toString();
+    if (!captchaToken) {
+      return NextResponse.json({ error: "CAPTCHA failed" }, { status: 400 });
+    }
+    const captchaOk = await verifyTurnstile(captchaToken, ip);
+    if (!captchaOk) {
+      await recordAdminLoginAttempt(ip, false);
+      return NextResponse.json({ error: "CAPTCHA failed" }, { status: 400 });
+    }
   }
 
   const email = (body.email ?? "").toString();

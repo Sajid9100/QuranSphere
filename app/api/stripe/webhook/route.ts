@@ -151,7 +151,7 @@ async function deliverZoomForPaidBooking(booking: Booking) {
       const duration = await lookupClassDuration(booking.teacher_id);
       const meeting = await createScheduledMeeting({
         topic: `${booking.teacher_name} × ${booking.student_name} — LearnFurqan`,
-        startTime: new Date(booking.selected_slot).toISOString(),
+        startTime: booking.selected_slot,
         durationMinutes: duration,
       });
       zoomLink = meeting.joinUrl;

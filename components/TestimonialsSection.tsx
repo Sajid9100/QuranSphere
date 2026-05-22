@@ -1,6 +1,6 @@
 "use client";
 
-import { Star, Quote } from "lucide-react";
+import { Star } from "lucide-react";
 import { Reveal } from "./ui/Reveal";
 import { Flag } from "./ui/Flag";
 
@@ -76,10 +76,6 @@ export function TestimonialsSection() {
 function TestimonialCard({ t }: { t: Testimonial }) {
   return (
     <div className="group relative flex h-full flex-col rounded-3xl border border-border bg-white p-7 shadow-soft transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-card">
-      <Quote
-        className="absolute right-6 top-6 h-10 w-10 text-primary/10"
-        aria-hidden
-      />
       <div className="flex items-center gap-1 text-accent">
         {[...Array(5)].map((_, i) => (
           <Star key={i} className="h-4 w-4 fill-current" />

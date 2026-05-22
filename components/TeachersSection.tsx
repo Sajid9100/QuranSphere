@@ -118,7 +118,7 @@ function TeacherCard({ teacher }: { teacher: Teacher }) {
         aria-hidden
       >
         <div className="absolute -bottom-9 left-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-primary shadow-soft ring-4 ring-white">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border-2 border-[#0a2e1e] bg-white text-2xl font-bold text-primary shadow-soft ring-4 ring-white">
             {teacher.initials}
           </div>
         </div>

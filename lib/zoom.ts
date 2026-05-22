@@ -60,11 +60,27 @@ export type ScheduledMeeting = {
   password: string;
 };
 
+// `selected_slot` is sometimes a human-readable string ("Tue 2pm UTC") rather
+// than an ISO timestamp. Zoom's API wants ISO 8601 — parse what we can, and
+// fall back to the current time (a meeting's join URL works regardless of its
+// scheduled start) so a booking confirmation never fails on an odd slot value.
+function normalizeStartTime(value: string): string {
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+  console.warn(
+    `[zoom] unparseable start time ${JSON.stringify(value)} — falling back to now`
+  );
+  return new Date().toISOString();
+}
+
 export async function createScheduledMeeting(args: {
   topic: string;
   startTime: string; // ISO 8601 in UTC
   durationMinutes: number;
 }): Promise<ScheduledMeeting> {
+  const startTime = normalizeStartTime(args.startTime);
   if (!isZoomConfigured) {
     throw new Error("Zoom is not configured on the server.");
   }
@@ -80,7 +96,7 @@ export async function createScheduledMeeting(args: {
     body: JSON.stringify({
       topic: args.topic,
       type: 2, // scheduled
-      start_time: args.startTime,
+      start_time: startTime,
       duration: Math.max(15, args.durationMinutes),
       timezone: "UTC",
       settings: {
@@ -130,7 +146,7 @@ export async function updateScheduledMeeting(args: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        start_time: args.startTime,
+        start_time: normalizeStartTime(args.startTime),
         duration: Math.max(15, args.durationMinutes),
         timezone: "UTC",
       }),

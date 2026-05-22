@@ -5,6 +5,7 @@ import {
   isSupabaseAdminConfigured,
 } from "@/lib/supabase";
 import { sendZoomLinkEmail } from "@/lib/email";
+import { createScheduledMeeting, isZoomConfigured } from "@/lib/zoom";
 import type { Booking } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -74,7 +75,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  // If a Zoom link was added (or replaced), notify the student.
+  // If a Zoom link was added (or replaced) by hand, notify the student.
   if (typeof body.zoom_link === "string" && update.zoom_link) {
     sendZoomLinkEmail({
       studentName: updated.student_name,
@@ -85,6 +86,35 @@ export async function PATCH(
     }).catch((err) => {
       console.error("[admin/bookings] zoom email failed", err);
     });
+  }
+
+  // When a booking is confirmed and has no link yet, auto-create a Zoom
+  // meeting, save it to the booking, and email the student. Best-effort:
+  // a Zoom/email failure is logged but does not fail the confirmation.
+  if (body.status === "confirmed" && !updated.zoom_link && isZoomConfigured) {
+    try {
+      const meeting = await createScheduledMeeting({
+        topic: `LearnFurqan Class - ${updated.teacher_name} & ${updated.student_name}`,
+        startTime: updated.selected_slot,
+        durationMinutes: 60,
+      });
+      const { error: linkError } = await admin
+        .from("bookings")
+        .update({ zoom_link: meeting.joinUrl })
+        .eq("id", params.id);
+      if (linkError) throw new Error(linkError.message);
+      updated.zoom_link = meeting.joinUrl;
+
+      await sendZoomLinkEmail({
+        studentName: updated.student_name,
+        studentEmail: updated.student_email,
+        teacherName: updated.teacher_name,
+        selectedSlot: updated.selected_slot,
+        zoomLink: meeting.joinUrl,
+      });
+    } catch (err) {
+      console.error("[admin/bookings] zoom auto-gen failed", err);
+    }
   }
 
   return NextResponse.json({ booking: updated });

@@ -6,6 +6,7 @@ import {
   CalendarClock,
   LineChart,
   Gamepad2,
+  LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
 import { Reveal } from "./ui/Reveal";
@@ -47,6 +48,12 @@ const FEATURES: Feature[] = [
     description:
       "Stars, streaks, and rewards keep children excited to attend their next Quran class.",
     icon: Gamepad2,
+  },
+  {
+    title: "Parent Dashboard",
+    description:
+      "See every lesson, track memorization progress, and stay connected with your child's Quran teacher.",
+    icon: LayoutDashboard,
   },
 ];
 
