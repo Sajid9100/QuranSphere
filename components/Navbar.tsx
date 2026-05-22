@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard,
   Users,
@@ -178,14 +179,6 @@ function MobileMenu() {
   const { user } = useUser();
   const isTeacher = useIsTeacher();
 
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
   const closeAnd = (fn?: () => void) => () => {
     setOpen(false);
     fn?.();
@@ -203,104 +196,114 @@ function MobileMenu() {
         <Menu className="h-6 w-6" />
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/40"
-          onClick={() => setOpen(false)}
-          aria-hidden
-        />
-      )}
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              key="overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={() => setOpen(false)}
+              aria-hidden
+            />
+            <motion.aside
+              key="drawer"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", ease: [0.22, 1, 0.36, 1], duration: 0.3 }}
+              className="fixed right-0 top-0 z-50 flex h-full w-[280px] flex-col overflow-y-auto bg-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile menu"
+            >
+              <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+                <Logo />
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close menu"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-800 hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-      <aside
-        className={cn(
-          "fixed right-0 top-0 z-[70] flex h-full w-[88%] max-w-sm flex-col bg-white shadow-2xl transition-transform duration-300 ease-out lg:hidden",
-          open ? "translate-x-0" : "translate-x-full"
+              <nav className="flex flex-col gap-1 px-3 py-4">
+                {NAV_LINKS.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className="rounded-lg px-3 py-3 text-base font-medium text-[#0a2e1e] hover:bg-gray-50"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+
+              <SignedIn>
+                <div className="border-t border-gray-200 px-3 py-4">
+                  <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Hi, {user?.firstName || user?.username || "Account"}
+                  </p>
+                  {isTeacher && (
+                    <Link
+                      href="/teacher"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
+                    >
+                      <GraduationCap className="h-4 w-4 text-[#c9a84c]" />
+                      Teacher Dashboard
+                    </Link>
+                  )}
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
+                  >
+                    <LayoutDashboard className="h-4 w-4 text-[#c9a84c]" />
+                    Student Dashboard
+                  </Link>
+                  <Link
+                    href="/parent"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
+                  >
+                    <Users className="h-4 w-4 text-[#c9a84c]" />
+                    Parent Dashboard
+                  </Link>
+                  <div className="mt-3 px-3">
+                    <UserButton afterSignOutUrl="/" />
+                  </div>
+                </div>
+              </SignedIn>
+
+              <SignedOut>
+                <div className="border-t border-gray-200 px-3 py-4">
+                  <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Log In
+                  </p>
+                  {LOGIN_OPTIONS.map((opt) => (
+                    <Link
+                      key={opt.href}
+                      href={opt.href}
+                      onClick={closeAnd()}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
+                    >
+                      <opt.Icon className="h-4 w-4 text-[#c9a84c]" />
+                      {opt.label}
+                    </Link>
+                  ))}
+                </div>
+              </SignedOut>
+            </motion.aside>
+          </>
         )}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Mobile menu"
-      >
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <Logo />
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            aria-label="Close menu"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-800 hover:bg-gray-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <nav className="flex flex-col gap-1 px-3 py-4">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setOpen(false)}
-              className="rounded-lg px-3 py-3 text-base font-medium text-[#0a2e1e] hover:bg-gray-50"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        <SignedIn>
-          <div className="border-t border-gray-200 px-3 py-4">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Hi, {user?.firstName || user?.username || "Account"}
-            </p>
-            {isTeacher && (
-              <Link
-                href="/teacher"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
-              >
-                <GraduationCap className="h-4 w-4 text-[#c9a84c]" />
-                Teacher Dashboard
-              </Link>
-            )}
-            <Link
-              href="/dashboard"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
-            >
-              <LayoutDashboard className="h-4 w-4 text-[#c9a84c]" />
-              Student Dashboard
-            </Link>
-            <Link
-              href="/parent"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
-            >
-              <Users className="h-4 w-4 text-[#c9a84c]" />
-              Parent Dashboard
-            </Link>
-            <div className="mt-3 px-3">
-              <UserButton afterSignOutUrl="/" />
-            </div>
-          </div>
-        </SignedIn>
-
-        <SignedOut>
-          <div className="border-t border-gray-200 px-3 py-4">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Log In
-            </p>
-            {LOGIN_OPTIONS.map((opt) => (
-              <Link
-                key={opt.href}
-                href={opt.href}
-                onClick={closeAnd()}
-                className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-[#0a2e1e] hover:bg-gray-50"
-              >
-                <opt.Icon className="h-4 w-4 text-[#c9a84c]" />
-                {opt.label}
-              </Link>
-            ))}
-          </div>
-        </SignedOut>
-      </aside>
+      </AnimatePresence>
     </div>
   );
 }
