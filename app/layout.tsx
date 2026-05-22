@@ -49,8 +49,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const tree = (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen overflow-x-clip bg-background text-foreground font-sans antialiased">
+    <html lang="en" className={`${inter.variable} max-w-full overflow-x-hidden`}>
+      <body className="min-h-screen max-w-full overflow-x-hidden bg-background text-foreground font-sans antialiased">
         <div className="page-transition">{children}</div>
         <ServiceWorkerRegister />
       </body>
