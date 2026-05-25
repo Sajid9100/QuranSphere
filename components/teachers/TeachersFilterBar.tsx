@@ -47,7 +47,7 @@ export function TeachersFilterBar({
   onChange: (next: Filters) => void;
 }) {
   return (
-    <div className="sticky top-16 z-30 -mx-4 border-y border-border/70 bg-background/85 px-4 glass-blur md:top-20 md:mx-0 md:rounded-2xl md:border md:px-6 md:shadow-soft">
+    <div className="sticky top-16 z-30 border-y border-border/70 bg-background/85 px-4 glass-blur md:top-20 md:rounded-2xl md:border md:px-6 md:shadow-soft">
       <div className="flex flex-wrap items-center gap-3 py-4">
         <FilterGroup label="Gender">
           <div className="inline-flex rounded-full border border-border bg-white p-0.5">
