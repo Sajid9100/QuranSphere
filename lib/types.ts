@@ -79,6 +79,7 @@ export type Booking = {
   status: "pending" | "confirmed" | "completed" | "cancelled";
   stripe_session_id: string;
   payment_status: "free_trial" | "pending" | "paid" | "refunded";
+  booking_type: "trial" | "paid";
   zoom_link: string;
   lesson_notes: string;
   created_at: string;
@@ -91,12 +92,14 @@ export type BookingInsert = Omit<
   | "status"
   | "stripe_session_id"
   | "payment_status"
+  | "booking_type"
   | "zoom_link"
   | "lesson_notes"
 > & {
   status?: Booking["status"];
   stripe_session_id?: string;
   payment_status?: Booking["payment_status"];
+  booking_type?: Booking["booking_type"];
   zoom_link?: string;
   lesson_notes?: string;
 };
@@ -194,6 +197,7 @@ export type StudentProfile = {
   phone: string;
   country: string;
   age_group: "" | AgeGroup;
+  stripe_customer_id: string | null;
   updated_at: string;
 };
 

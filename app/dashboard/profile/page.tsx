@@ -19,6 +19,7 @@ async function loadProfile(
     phone: "",
     country: "",
     age_group: "",
+    stripe_customer_id: null,
     updated_at: new Date().toISOString(),
   };
   if (!isSupabaseAdminConfigured) return fallback;

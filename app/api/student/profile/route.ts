@@ -21,6 +21,7 @@ function baseProfile(student: {
     phone: "",
     country: "",
     age_group: "",
+    stripe_customer_id: null,
     updated_at: new Date().toISOString(),
   };
 }

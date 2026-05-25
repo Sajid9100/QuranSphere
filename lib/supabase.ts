@@ -119,12 +119,11 @@ export async function setBookingZoomLink(
   }
 }
 
-// Returns true if the student already has a non-cancelled booking with this
-// teacher — i.e. their free first class has been used and the next one needs
-// to be paid for.
-export async function hasPriorBookingWithTeacher(
-  studentEmail: string,
-  teacherId: string
+// Returns true if the student already has a non-cancelled trial booking
+// anywhere on the platform — the platform-wide one-trial-per-student rule.
+// Any subsequent class for the same email must be a paid booking.
+export async function hasExistingTrialBooking(
+  studentEmail: string
 ): Promise<boolean> {
   if (!isSupabaseAdminConfigured) return false;
   const admin = createServerSupabaseClient();
@@ -132,14 +131,56 @@ export async function hasPriorBookingWithTeacher(
     .from("bookings")
     .select("id")
     .eq("student_email", studentEmail.toLowerCase())
-    .eq("teacher_id", teacherId)
+    .eq("booking_type", "trial")
     .neq("status", "cancelled")
     .limit(1);
   if (error) {
-    console.warn("[supabase] hasPriorBookingWithTeacher failed:", error.message);
+    console.warn("[supabase] hasExistingTrialBooking failed:", error.message);
     return false;
   }
   return (data?.length ?? 0) > 0;
+}
+
+// Looks up the cached Stripe customer ID for a student. Returns null when no
+// profile exists yet or when the column is empty (first-time trial booker).
+export async function getStudentStripeCustomerId(
+  studentEmail: string
+): Promise<string | null> {
+  if (!isSupabaseAdminConfigured) return null;
+  const admin = createServerSupabaseClient();
+  const { data, error } = await admin
+    .from("student_profiles")
+    .select("stripe_customer_id")
+    .eq("email", studentEmail.toLowerCase())
+    .maybeSingle();
+  if (error) {
+    console.warn("[supabase] getStudentStripeCustomerId failed:", error.message);
+    return null;
+  }
+  return (data as { stripe_customer_id: string | null } | null)?.stripe_customer_id ?? null;
+}
+
+// Upserts the Stripe customer ID onto the student's profile row so it can be
+// reused for future paid bookings without creating a new Customer each time.
+export async function upsertStudentStripeCustomer(args: {
+  email: string;
+  name?: string;
+  stripe_customer_id: string;
+}): Promise<void> {
+  if (!isSupabaseAdminConfigured) return;
+  const admin = createServerSupabaseClient();
+  const { error } = await admin.from("student_profiles").upsert(
+    {
+      email: args.email.toLowerCase(),
+      name: args.name ?? "",
+      stripe_customer_id: args.stripe_customer_id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "email" }
+  );
+  if (error) {
+    console.warn("[supabase] upsertStudentStripeCustomer failed:", error.message);
+  }
 }
 
 export async function getAvailabilityRules(

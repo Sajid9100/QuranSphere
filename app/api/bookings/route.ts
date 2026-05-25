@@ -2,22 +2,28 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import {
   createBooking,
+  createServerSupabaseClient,
   getAvailabilityExceptions,
   getAvailabilityRules,
   getBookedRangesForTeacher,
+  getStudentStripeCustomerId,
   getTeacherBySlug,
-  hasPriorBookingWithTeacher,
+  hasExistingTrialBooking,
   isSupabaseAdminConfigured,
   setBookingZoomLink,
 } from "@/lib/supabase";
 import { expandAvailability } from "@/lib/availability";
-import { sendBookingConfirmationEmails } from "@/lib/email";
-import { getStripe, isStripeConfigured } from "@/lib/stripe";
-import { createScheduledMeeting, isZoomConfigured } from "@/lib/zoom";
+import {
+  getStripe,
+  hasStripePublishableKey,
+  isStripeConfigured,
+} from "@/lib/stripe";
 import {
   computeApplicationFeeCents,
   teacherCanReceivePayouts,
 } from "@/lib/stripe-connect";
+import { createScheduledMeeting, isZoomConfigured } from "@/lib/zoom";
+import { sendBookingConfirmationEmails } from "@/lib/email";
 import type { AgeGroup, StudentLevel, Teacher } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -114,13 +120,59 @@ export async function POST(req: Request) {
   const studentEmail = body.student_email!.trim().toLowerCase();
   const studentName = body.student_name!.trim();
 
-  // First booking with a given teacher is always free. Subsequent bookings
-  // with the same teacher get routed through Stripe Checkout.
-  const requiresPayment =
-    isSupabaseAdminConfigured &&
-    (await hasPriorBookingWithTeacher(studentEmail, teacher.id));
+  // Platform-wide rule: every student gets exactly one free trial. If they've
+  // already had one, this booking is paid and routes through Stripe Checkout.
+  const alreadyUsedTrial =
+    isSupabaseAdminConfigured && (await hasExistingTrialBooking(studentEmail));
+
+  console.log("[bookings] decision", {
+    email: studentEmail,
+    teacher_slug: teacher.slug,
+    already_used_trial: alreadyUsedTrial,
+    stripe_configured: isStripeConfigured,
+    has_publishable_key: hasStripePublishableKey,
+  });
 
   try {
+    if (alreadyUsedTrial) {
+      // Paid booking — confirm immediately on the database side, generate a
+      // Checkout session for the actual charge. Webhook flips payment_status.
+      const { id } = await createBooking({
+        teacher_id: teacher.id,
+        teacher_name: teacher.name,
+        teacher_slug: teacher.slug,
+        student_name: studentName,
+        student_email: studentEmail,
+        student_phone: body.student_phone!.trim(),
+        student_country: body.student_country!.trim(),
+        age_group: body.age_group!,
+        current_level: body.current_level!,
+        selected_slot: slotDate.toISOString(),
+        message: (body.message ?? "").trim(),
+        payment_status: "pending",
+        booking_type: "paid",
+      });
+
+      const checkout = await createBookingCheckoutSession({
+        bookingId: id,
+        teacher,
+        studentEmail,
+        studentName,
+      });
+      console.log("[bookings] -> paid checkout", { id, session_url: checkout.url });
+      return NextResponse.json(
+        {
+          ok: true,
+          id,
+          requires_payment: true,
+          checkout_url: checkout.url,
+        },
+        { status: 201 }
+      );
+    }
+
+    // Trial flow: reserve the slot with a pending booking, save card via
+    // SetupIntent, then finish in /api/bookings/[id]/confirm-trial.
     const { id } = await createBooking({
       teacher_id: teacher.id,
       teacher_name: teacher.name,
@@ -133,54 +185,55 @@ export async function POST(req: Request) {
       current_level: body.current_level!,
       selected_slot: slotDate.toISOString(),
       message: (body.message ?? "").trim(),
-      payment_status: requiresPayment ? "pending" : "free_trial",
+      payment_status: "pending",
+      booking_type: "trial",
     });
 
-    if (requiresPayment) {
-      const checkout = await createBookingCheckoutSession({
+    if (!isStripeConfigured) {
+      // No Stripe in this env — confirm the trial inline so the DB row doesn't
+      // get stuck in 'pending' forever. Only meant for unconfigured dev
+      // environments; real prod always has Stripe set.
+      console.warn(
+        "[bookings] -> trial confirmed without card (Stripe not configured)",
+        { id }
+      );
+      await confirmTrialInline({
         bookingId: id,
         teacher,
-        studentEmail,
         studentName,
+        studentEmail,
+        studentPhone: body.student_phone!.trim(),
+        studentCountry: body.student_country!.trim(),
+        ageGroup: body.age_group!,
+        currentLevel: body.current_level!,
+        selectedSlot: slotDate,
+        message: (body.message ?? "").trim(),
       });
       return NextResponse.json(
-        {
-          ok: true,
-          id,
-          requires_payment: true,
-          checkout_url: checkout.url,
-        },
+        { ok: true, id, requires_setup: false, requires_payment: false },
         { status: 201 }
       );
     }
 
-    // Free trial — auto-generate Zoom link (best-effort) then send
-    // confirmation emails. Paid bookings only get emails after the Stripe
-    // webhook flips the row to "paid".
-    const zoomLink = await maybeGenerateZoomLink({
+    const setup = await createTrialSetupIntent({
       bookingId: id,
-      teacher,
-      studentName,
-      slot: slotDate,
-    });
-
-    sendBookingConfirmationEmails({
-      studentName,
       studentEmail,
-      studentPhone: body.student_phone!.trim(),
-      studentCountry: body.student_country!.trim(),
-      ageGroup: body.age_group!,
-      currentLevel: body.current_level!,
-      selectedSlot: slotDate.toISOString(),
-      message: (body.message ?? "").trim(),
-      teacher,
-      zoomLink,
-    }).catch((err) => {
-      console.error("[bookings] email send failed", err);
+      studentName,
+    });
+    console.log("[bookings] -> trial setup intent created", {
+      id,
+      customer_id: setup.customerId,
+      client_secret_present: Boolean(setup.clientSecret),
     });
 
     return NextResponse.json(
-      { ok: true, id, requires_payment: false },
+      {
+        ok: true,
+        id,
+        requires_setup: true,
+        client_secret: setup.clientSecret,
+        customer_id: setup.customerId,
+      },
       { status: 201 }
     );
   } catch (err) {
@@ -192,28 +245,94 @@ export async function POST(req: Request) {
   }
 }
 
-// Best-effort: create a Zoom meeting and persist the join link on the booking.
-// Returns the join URL on success, undefined when Zoom is unconfigured or the
-// API call failed. Failures are logged but never break the booking flow.
-async function maybeGenerateZoomLink(args: {
+// Used only when STRIPE_SECRET_KEY isn't configured in this env. Flips the
+// pending trial row to confirmed and runs the side effects (zoom + email).
+async function confirmTrialInline(args: {
   bookingId: string;
   teacher: Teacher;
   studentName: string;
-  slot: Date;
-}): Promise<string | undefined> {
-  if (!isZoomConfigured) return undefined;
-  try {
-    const meeting = await createScheduledMeeting({
-      topic: `${args.teacher.name} × ${args.studentName} — LearnFurqan`,
-      startTime: args.slot.toISOString(),
-      durationMinutes: args.teacher.class_duration_minutes ?? 30,
-    });
-    await setBookingZoomLink(args.bookingId, meeting.joinUrl);
-    return meeting.joinUrl;
-  } catch (err) {
-    console.error("[bookings] zoom auto-gen failed", err);
-    return undefined;
+  studentEmail: string;
+  studentPhone: string;
+  studentCountry: string;
+  ageGroup: AgeGroup;
+  currentLevel: StudentLevel;
+  selectedSlot: Date;
+  message: string;
+}): Promise<void> {
+  if (isSupabaseAdminConfigured) {
+    const admin = createServerSupabaseClient();
+    await admin
+      .from("bookings")
+      .update({ status: "confirmed", payment_status: "free_trial" })
+      .eq("id", args.bookingId);
   }
+
+  let zoomLink: string | undefined;
+  if (isZoomConfigured) {
+    try {
+      const meeting = await createScheduledMeeting({
+        topic: `${args.teacher.name} × ${args.studentName} — LearnFurqan`,
+        startTime: args.selectedSlot.toISOString(),
+        durationMinutes: args.teacher.class_duration_minutes ?? 30,
+      });
+      zoomLink = meeting.joinUrl;
+      await setBookingZoomLink(args.bookingId, zoomLink);
+    } catch (err) {
+      console.error("[bookings] inline zoom auto-gen failed", err);
+    }
+  }
+
+  sendBookingConfirmationEmails({
+    studentName: args.studentName,
+    studentEmail: args.studentEmail,
+    studentPhone: args.studentPhone,
+    studentCountry: args.studentCountry,
+    ageGroup: args.ageGroup,
+    currentLevel: args.currentLevel,
+    selectedSlot: args.selectedSlot.toISOString(),
+    message: args.message,
+    teacher: args.teacher,
+    zoomLink,
+  }).catch((err) => console.error("[bookings] inline email send failed", err));
+}
+
+// Creates (or reuses) a Stripe Customer for this student, then issues a
+// SetupIntent so the client can save a card without taking a payment.
+// Caller must verify isStripeConfigured before invoking.
+async function createTrialSetupIntent(args: {
+  bookingId: string;
+  studentEmail: string;
+  studentName: string;
+}): Promise<{ clientSecret: string; customerId: string }> {
+  const stripe = getStripe();
+
+  const existingId = await getStudentStripeCustomerId(args.studentEmail);
+  let customerId = existingId ?? null;
+
+  if (!customerId) {
+    const created = await stripe.customers.create({
+      email: args.studentEmail,
+      name: args.studentName,
+      metadata: { source: "learnfurqan_trial" },
+    });
+    customerId = created.id;
+  }
+
+  const intent = await stripe.setupIntents.create({
+    customer: customerId,
+    payment_method_types: ["card"],
+    usage: "off_session",
+    metadata: {
+      booking_id: args.bookingId,
+      student_email: args.studentEmail,
+      purpose: "trial_card_save",
+    },
+  });
+
+  if (!intent.client_secret) {
+    throw new Error("Stripe did not return a SetupIntent client_secret");
+  }
+  return { clientSecret: intent.client_secret, customerId };
 }
 
 async function createBookingCheckoutSession(args: {
@@ -256,7 +375,11 @@ async function createBookingCheckoutSession(args: {
     if (fee > 0) paymentIntentData.application_fee_amount = fee;
   }
 
-  const session = await stripe.checkout.sessions.create({
+  // Reuse the cached Stripe customer when we already have one — keeps every
+  // future paid charge against the same Customer the trial card was attached to.
+  const existingCustomerId = await getStudentStripeCustomerId(args.studentEmail);
+
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     line_items: [
       {
@@ -271,7 +394,6 @@ async function createBookingCheckoutSession(args: {
         quantity: 1,
       },
     ],
-    customer_email: args.studentEmail,
     success_url: `${siteUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${siteUrl}/book/${args.teacher.slug}`,
     metadata: {
@@ -281,7 +403,14 @@ async function createBookingCheckoutSession(args: {
       student_name: args.studentName,
     },
     payment_intent_data: paymentIntentData,
-  });
+  };
+  if (existingCustomerId) {
+    sessionParams.customer = existingCustomerId;
+  } else {
+    sessionParams.customer_email = args.studentEmail;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   if (!session.url) {
     throw new Stripe.errors.StripeError({

@@ -113,6 +113,8 @@ create table if not exists bookings (
   stripe_session_id   text default '',
   payment_status      text default 'free_trial'
                         check (payment_status in ('free_trial','pending','paid','refunded')),
+  booking_type        text not null default 'paid'
+                        check (booking_type in ('trial','paid')),
   zoom_link           text default '',
   lesson_notes        text not null default '',
   created_at          timestamptz default now()
@@ -122,6 +124,9 @@ create index if not exists bookings_teacher_id_idx on bookings (teacher_id);
 create index if not exists bookings_student_email_idx on bookings (student_email);
 create index if not exists bookings_status_idx on bookings (status);
 create index if not exists bookings_created_at_idx on bookings (created_at desc);
+create index if not exists bookings_student_email_trial_idx
+  on bookings (lower(student_email))
+  where booking_type = 'trial' and status <> 'cancelled';
 
 -- ============================================================
 -- REVIEWS — students rate a teacher after a completed booking
@@ -252,16 +257,20 @@ create index if not exists teacher_applications_status_idx on teacher_applicatio
 -- to migrate when Clerk user IDs change.
 -- ============================================================
 create table if not exists student_profiles (
-  email        text primary key,
-  name         text default '',
-  phone        text default '',
-  country      text default '',
-  age_group    text default '',
-  updated_at   timestamptz default now()
+  email               text primary key,
+  name                text default '',
+  phone               text default '',
+  country             text default '',
+  age_group           text default '',
+  stripe_customer_id  text,
+  updated_at          timestamptz default now()
 );
 
 create index if not exists student_profiles_updated_at_idx
   on student_profiles (updated_at desc);
+create index if not exists student_profiles_stripe_customer_idx
+  on student_profiles (stripe_customer_id)
+  where stripe_customer_id is not null;
 
 -- ============================================================
 -- PARENT — CHILDREN (parents adding their kids to the platform)

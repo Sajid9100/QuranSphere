@@ -16,6 +16,7 @@ import {
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { SlotPicker } from "./SlotPicker";
+import { TrialCardStep } from "./TrialCardStep";
 import { cn } from "@/lib/utils";
 import type { Teacher, AgeGroup, StudentLevel as Level } from "@/lib/types";
 
@@ -83,13 +84,41 @@ const initialState: FormState = {
   message: "",
 };
 
-type Status = "idle" | "submitting" | "success" | "redirecting" | "error";
+type Status =
+  | "idle"
+  | "submitting"
+  | "card_setup"
+  | "success"
+  | "redirecting"
+  | "error";
+
+type CardSetup = {
+  bookingId: string;
+  clientSecret: string;
+  publishableKey: string;
+};
+
+const STRIPE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+
+// Build-time visibility check — confirms the publishable key was inlined into
+// the browser bundle (Next inlines NEXT_PUBLIC_* env vars at build time).
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line no-console
+  console.log("[BookingForm] build marker v2 (trial setup intent)", {
+    has_publishable_key: Boolean(STRIPE_PUBLISHABLE_KEY),
+    publishable_key_prefix: STRIPE_PUBLISHABLE_KEY
+      ? STRIPE_PUBLISHABLE_KEY.slice(0, 8) + "…"
+      : "(empty)",
+  });
+}
 
 export function BookingForm({ teacher }: { teacher: Teacher }) {
   const [form, setForm] = useState<FormState>(initialState);
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cardSetup, setCardSetup] = useState<CardSetup | null>(null);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -139,18 +168,64 @@ export function BookingForm({ teacher }: { teacher: Teacher }) {
       });
       const data: {
         ok?: boolean;
+        id?: string;
         error?: string;
         requires_payment?: boolean;
+        requires_setup?: boolean;
         checkout_url?: string;
+        client_secret?: string;
       } = await res.json().catch(() => ({}));
+      // eslint-disable-next-line no-console
+      console.log("[BookingForm] /api/bookings response", {
+        http_status: res.status,
+        body: {
+          ok: data.ok,
+          id: data.id,
+          error: data.error,
+          requires_payment: data.requires_payment,
+          requires_setup: data.requires_setup,
+          has_checkout_url: Boolean(data.checkout_url),
+          has_client_secret: Boolean(data.client_secret),
+        },
+        client_has_publishable_key: Boolean(STRIPE_PUBLISHABLE_KEY),
+      });
       if (!res.ok || !data.ok) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
       if (data.requires_payment && data.checkout_url) {
+        // eslint-disable-next-line no-console
+        console.log("[BookingForm] -> redirecting to Stripe Checkout");
         setStatus("redirecting");
         window.location.href = data.checkout_url;
         return;
       }
+      if (data.requires_setup) {
+        if (!data.id || !data.client_secret) {
+          throw new Error(
+            "Card setup required but the server didn't return a SetupIntent. Please contact support."
+          );
+        }
+        if (!STRIPE_PUBLISHABLE_KEY) {
+          throw new Error(
+            "Card setup is not configured on the client (missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)."
+          );
+        }
+        // eslint-disable-next-line no-console
+        console.log("[BookingForm] -> entering card_setup step");
+        setCardSetup({
+          bookingId: data.id,
+          clientSecret: data.client_secret,
+          publishableKey: STRIPE_PUBLISHABLE_KEY,
+        });
+        setStatus("card_setup");
+        return;
+      }
+      // No card setup needed (Stripe not configured server-side) — trial is
+      // already confirmed inline by /api/bookings.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[BookingForm] -> success WITHOUT card step. Likely cause: server-side STRIPE_SECRET_KEY is missing or not loaded by the Next.js process. The booking row will already be confirmed."
+      );
       setStatus("success");
     } catch (err) {
       console.error("Booking error", err);
@@ -161,6 +236,28 @@ export function BookingForm({ teacher }: { teacher: Teacher }) {
 
   if (status === "success") {
     return <BookingSuccess email={form.email} />;
+  }
+
+  if (status === "card_setup" && cardSetup) {
+    return (
+      <div className="rounded-3xl border border-border bg-white p-6 shadow-card md:p-8">
+        <h2 className="font-heading text-2xl font-semibold text-foreground">
+          One last step — save your card
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your trial with {teacher.name.split(" ")[0]} is free. We only save
+          your card so future paid classes are one-tap easy.
+        </p>
+        <div className="mt-6">
+          <TrialCardStep
+            bookingId={cardSetup.bookingId}
+            clientSecret={cardSetup.clientSecret}
+            publishableKey={cardSetup.publishableKey}
+            onCardSaved={() => setStatus("success")}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

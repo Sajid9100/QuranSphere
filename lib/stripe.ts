@@ -11,6 +11,7 @@ const isPlaceholder = (v: string | undefined) =>
 
 export const isStripeConfigured = !isPlaceholder(secretKey);
 export const isStripeWebhookConfigured = !isPlaceholder(webhookSecret);
+export const hasStripePublishableKey = !isPlaceholder(publishableKey);
 
 // ---------------------------------------------------------------------------
 // Server-side Stripe (only call from API routes / server code)
