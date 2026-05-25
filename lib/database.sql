@@ -256,9 +256,10 @@ create index if not exists teacher_applications_status_idx on teacher_applicatio
 -- Keyed on the lowercase Clerk-verified email so we don't need
 -- to migrate when Clerk user IDs change.
 -- ============================================================
+-- name is intentionally omitted — student name comes from Clerk
+-- (StudentProfile.name is overlaid by API/page handlers).
 create table if not exists student_profiles (
   email               text primary key,
-  name                text default '',
   phone               text default '',
   country             text default '',
   age_group           text default '',

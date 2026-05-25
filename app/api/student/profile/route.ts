@@ -81,9 +81,10 @@ export async function PATCH(req: Request) {
     );
   }
 
+  // student_profiles has no `name` column — name is sourced from Clerk
+  // (student.fullName) and reattached to the response below.
   const upsert = {
     email: student.email,
-    name: student.fullName,
     phone: (body.phone ?? "").trim(),
     country: (body.country ?? "").trim(),
     age_group: (body.age_group ?? "") as "" | AgeGroup,
@@ -99,5 +100,8 @@ export async function PATCH(req: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ profile: data });
+  // Reattach Clerk-verified name since the DB doesn't store it.
+  return NextResponse.json({
+    profile: { ...data, name: student.fullName },
+  });
 }

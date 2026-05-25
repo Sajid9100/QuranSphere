@@ -115,7 +115,6 @@ export async function POST(
 
   await upsertStudentStripeCustomer({
     email: booking.student_email,
-    name: booking.student_name,
     stripe_customer_id: customerId,
   });
 

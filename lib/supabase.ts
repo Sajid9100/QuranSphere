@@ -162,9 +162,10 @@ export async function getStudentStripeCustomerId(
 
 // Upserts the Stripe customer ID onto the student's profile row so it can be
 // reused for future paid bookings without creating a new Customer each time.
+// student_profiles has no `name` column — the in-memory StudentProfile.name
+// always comes from Clerk, not Supabase.
 export async function upsertStudentStripeCustomer(args: {
   email: string;
-  name?: string;
   stripe_customer_id: string;
 }): Promise<void> {
   if (!isSupabaseAdminConfigured) return;
@@ -172,7 +173,6 @@ export async function upsertStudentStripeCustomer(args: {
   const { error } = await admin.from("student_profiles").upsert(
     {
       email: args.email.toLowerCase(),
-      name: args.name ?? "",
       stripe_customer_id: args.stripe_customer_id,
       updated_at: new Date().toISOString(),
     },
